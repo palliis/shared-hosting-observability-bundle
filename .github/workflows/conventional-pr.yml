@@ -1,0 +1,36 @@
+name: Conventional PR
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: conventional-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+
+    steps:
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|perf|revert|docs|style|refactor|test|build|ci|chore)(\([^)]+\))?!?: .+'
+
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "PR title must use Conventional Commits, for example: feat: add Symfony 8 support"
+            echo "Actual title: $PR_TITLE"
+            exit 1
+          fi

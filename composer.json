@@ -4,7 +4,7 @@
     "type": "symfony-bundle",
     "license": "proprietary",
     "require": {
-        "php": ">=8.3",
+        "php": ">=8.4",
         "monolog/monolog": "^3.5",
         "psr/cache": "^2.0 || ^3.0",
         "psr/log": "^2.0 || ^3.0",
