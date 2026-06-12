@@ -75,6 +75,7 @@ final class ShipTracesCommand extends Command
 
             $dryRun = (bool) $input->getOption('dry-run');
             $sentTraces = 0;
+            $batchSize = max(1, $this->batchSize);
             foreach ($files as $file) {
                 $traces = $this->readTraceFile($file);
                 if ([] === $traces) {
@@ -84,7 +85,7 @@ final class ShipTracesCommand extends Command
                     continue;
                 }
 
-                foreach (array_chunk($traces, $this->batchSize) as $batch) {
+                foreach (array_chunk($traces, $batchSize) as $batch) {
                     if (!$dryRun) {
                         $this->sendBatch($batch);
                     }

@@ -112,7 +112,7 @@ final class SyntheticCheckCommand extends Command
             $parsed = [];
             foreach ($checks as $name => $pathOrUrl) {
                 $name = trim((string) $name);
-                $pathOrUrl = is_scalar($pathOrUrl) ? trim((string) $pathOrUrl) : '';
+                $pathOrUrl = trim($pathOrUrl);
                 if ('' !== $name && '' !== $pathOrUrl) {
                     $parsed[$name] = $pathOrUrl;
                 }

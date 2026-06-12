@@ -61,7 +61,6 @@ class TelemetryBearerHeaderTest extends TestCase
     private function invokeBuildHeaders(object $command): array
     {
         $method = new \ReflectionMethod($command, 'buildHeaders');
-        $method->setAccessible(true);
 
         /** @var array<string, string> $headers */
         $headers = $method->invoke($command);
