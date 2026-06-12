@@ -16,7 +16,7 @@ class TelemetryBearerHeaderTest extends TestCase
     public function testShipLogsAddsBearerAuthorizationWhenDedicatedTokenIsProvided(): void
     {
         $command = new ShipLogsCommand(
-            $this->createMock(HttpClientInterface::class),
+            $this->createStub(HttpClientInterface::class),
             new OtlpLogPayloadBuilder(),
             new OtlpProtobufLogPayloadBuilder(),
             new HttpHeaderParser(),
@@ -39,7 +39,7 @@ class TelemetryBearerHeaderTest extends TestCase
     public function testShipTracesDoesNotOverrideExplicitAuthorizationHeader(): void
     {
         $command = new ShipTracesCommand(
-            $this->createMock(HttpClientInterface::class),
+            $this->createStub(HttpClientInterface::class),
             new OtlpTracePayloadBuilder(),
             new HttpHeaderParser(),
             __DIR__,
