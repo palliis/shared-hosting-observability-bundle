@@ -18,23 +18,15 @@ concurrency:
 
 jobs:
   test:
-    name: PHP ${{ matrix.php }} / Symfony ${{ matrix.symfony }}
+    name: PHP ${{ matrix.php }} / Symfony 8
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - php: '8.3'
-            symfony: '6.4.*'
-          - php: '8.3'
-            symfony: '7.4.*'
-          - php: '8.4'
-            symfony: '6.4.*'
-          - php: '8.4'
-            symfony: '7.4.*'
-          - php: '8.4'
-            symfony: '8.*'
+        php:
+          - '8.4'
+          - '8.5'
 
     steps:
       - name: Checkout
@@ -51,20 +43,7 @@ jobs:
         run: composer validate --strict
 
       - name: Install dependencies
-        run: >-
-          composer update
-          --with symfony/cache:${{ matrix.symfony }}
-          --with symfony/config:${{ matrix.symfony }}
-          --with symfony/console:${{ matrix.symfony }}
-          --with symfony/dependency-injection:${{ matrix.symfony }}
-          --with symfony/event-dispatcher:${{ matrix.symfony }}
-          --with symfony/framework-bundle:${{ matrix.symfony }}
-          --with symfony/http-client:${{ matrix.symfony }}
-          --with symfony/http-foundation:${{ matrix.symfony }}
-          --with symfony/http-kernel:${{ matrix.symfony }}
-          --no-interaction
-          --no-progress
-          --prefer-dist
+        run: composer update --no-interaction --no-progress --prefer-dist
 
       - name: Check coding style
         run: composer cs:check

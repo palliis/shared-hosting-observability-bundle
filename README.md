@@ -16,6 +16,8 @@ Request handling never performs remote telemetry network I/O. Requests write reg
 
 ## Install
 
+Requires PHP 8.4+ and Symfony 8.
+
 Use it as a normal Composer package:
 
 ```bash
