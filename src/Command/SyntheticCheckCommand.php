@@ -44,7 +44,14 @@ final class SyntheticCheckCommand extends Command
 
         $failures = 0;
         foreach ($checks as $name => $pathOrUrl) {
-            $url = $this->buildUrl($pathOrUrl);
+            try {
+                $url = $this->buildUrl($pathOrUrl);
+            } catch (\InvalidArgumentException $e) {
+                $io->error($e->getMessage());
+
+                return Command::INVALID;
+            }
+
             $startedAt = microtime(true);
             $statusCode = 0;
             $success = false;
@@ -166,6 +173,15 @@ final class SyntheticCheckCommand extends Command
             return $pathOrUrl;
         }
 
-        return rtrim($this->baseUrl, '/').'/'.ltrim($pathOrUrl, '/');
+        $baseUrl = trim($this->baseUrl);
+        if ('' === $baseUrl) {
+            throw new \InvalidArgumentException(sprintf('The synthetics.base_url option must be configured when using relative check path "%s".', $pathOrUrl));
+        }
+
+        if (!preg_match('#^https?://#i', $baseUrl)) {
+            throw new \InvalidArgumentException('The synthetics.base_url option must be an absolute HTTP(S) URL when using relative checks.');
+        }
+
+        return rtrim($baseUrl, '/').'/'.ltrim($pathOrUrl, '/');
     }
 }

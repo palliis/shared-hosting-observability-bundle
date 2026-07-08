@@ -96,6 +96,7 @@ shared_hosting_observability:
 
   metrics:
     cache_pool: cache.app
+    lock_path: 'var/telemetry/state/metrics.lock'
     otlp_endpoint: '%env(default:empty_string:TELEMETRY_METRICS_OTLP_ENDPOINT)%'
     otlp_headers: '%env(default:empty_string:TELEMETRY_METRICS_OTLP_HEADERS)%'
     otlp_bearer_token: '%env(default:empty_string:TELEMETRY_METRICS_OTLP_BEARER_TOKEN)%'
@@ -116,13 +117,15 @@ shared_hosting_observability:
 TELEMETRY_SYNTHETIC_CHECKS='health=/api/v1/health,telemetry_status=/api/v1/telemetry/status'
 ```
 
-OTLP header strings are semicolon-separated. Bearer tokens are added as `Authorization: Bearer ...` unless the headers already contain `Authorization`.
+OTLP header strings are semicolon-separated. Escape a literal semicolon in a value as `\;`. Bearer tokens are added as `Authorization: Bearer ...` unless the headers already contain `Authorization`.
 
 ```dotenv
 TELEMETRY_LOGS_OTLP_HEADERS='X-Scope-OrgID=tenant-a'
 TELEMETRY_TRACES_OTLP_BEARER_TOKEN='token'
 TELEMETRY_METRICS_OTLP_BEARER_TOKEN='token'
 ```
+
+Relative synthetic check paths require `synthetics.base_url` to be configured with an absolute HTTP(S) URL. Absolute check URLs can be used without `base_url`.
 
 ## Grafana Cloud OTLP
 

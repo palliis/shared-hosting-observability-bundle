@@ -149,6 +149,8 @@ final class SharedHostingObservabilityExtension extends Extension
                 new Reference($config['metrics']['cache_pool']),
                 new Reference(TraceRecorder::class),
                 $config['metric_prefix'],
+                '%kernel.project_dir%',
+                $config['metrics']['lock_path'],
             ])
             ->setPublic(true)
         );

@@ -77,6 +77,7 @@ final class Configuration implements ConfigurationInterface
                     ->addDefaultsIfNotSet()
                     ->children()
                         ->scalarNode('cache_pool')->defaultValue('cache.app')->end()
+                        ->scalarNode('lock_path')->defaultValue('var/telemetry/state/metrics.lock')->end()
                         ->scalarNode('otlp_endpoint')->defaultValue('')->end()
                         ->scalarNode('otlp_headers')->defaultValue('')->end()
                         ->scalarNode('otlp_bearer_token')->defaultValue('')->end()

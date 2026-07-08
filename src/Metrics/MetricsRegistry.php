@@ -37,8 +37,13 @@ final class MetricsRegistry
         private CacheItemPoolInterface $cache,
         private ?TraceRecorder $traceRecorder = null,
         private string $metricPrefix = 'sho',
+        private string $projectDir = '',
+        private string $lockPath = '',
     ) {
         $this->metricPrefix = $this->normalizeMetricPrefix($this->metricPrefix);
+        $this->lockPath = '' !== trim($this->lockPath)
+            ? $this->lockPath
+            : sys_get_temp_dir().DIRECTORY_SEPARATOR.'shared-hosting-observability-metrics-'.sha1($this->projectDir ?: __DIR__).'.lock';
     }
 
     public function recordProviderRequest(
@@ -48,57 +53,61 @@ final class MetricsRegistry
         int $statusCode,
         bool $success,
     ): void {
-        $this->loadFromCache();
         $durationSeconds = max(0.0, $durationSeconds);
 
-        $counterLabels = [
-            'service_type' => $serviceType,
-            'provider' => $provider,
-            'success' => $success ? 'true' : 'false',
-            'status_code' => (string) $statusCode,
-        ];
-        $counterKey = $this->buildKey($counterLabels);
+        try {
+            $this->mutateRegistry(function () use ($serviceType, $provider, $durationSeconds, $statusCode, $success): void {
+                $counterLabels = [
+                    'service_type' => $serviceType,
+                    'provider' => $provider,
+                    'success' => $success ? 'true' : 'false',
+                    'status_code' => (string) $statusCode,
+                ];
+                $counterKey = $this->buildKey($counterLabels);
 
-        if (!isset($this->providerCounters[$counterKey])) {
-            $this->providerCounters[$counterKey] = [
-                'labels' => $counterLabels,
-                'count' => 0,
-            ];
+                if (!isset($this->providerCounters[$counterKey])) {
+                    $this->providerCounters[$counterKey] = [
+                        'labels' => $counterLabels,
+                        'count' => 0,
+                    ];
+                }
+                ++$this->providerCounters[$counterKey]['count'];
+
+                $histogramLabels = [
+                    'service_type' => $serviceType,
+                    'provider' => $provider,
+                ];
+                $histogramKey = $this->buildKey($histogramLabels);
+
+                if (!isset($this->providerHistograms[$histogramKey])) {
+                    $bucketCounts = [];
+                    foreach ($this->providerHistogramBuckets as $bucket) {
+                        $bucketCounts[$this->formatBucket($bucket)] = 0;
+                    }
+
+                    $this->providerHistograms[$histogramKey] = [
+                        'labels' => $histogramLabels,
+                        'buckets' => $bucketCounts,
+                        'sum' => 0.0,
+                        'count' => 0,
+                    ];
+                }
+
+                $histogram = &$this->providerHistograms[$histogramKey];
+                $histogram['sum'] += $durationSeconds;
+                ++$histogram['count'];
+
+                foreach ($this->providerHistogramBuckets as $bucket) {
+                    if ($durationSeconds <= $bucket) {
+                        $bucketKey = $this->formatBucket($bucket);
+                        ++$histogram['buckets'][$bucketKey];
+                    }
+                }
+                unset($histogram);
+            });
+        } catch (\Throwable) {
+            // Observability must never break provider calls.
         }
-        ++$this->providerCounters[$counterKey]['count'];
-
-        $histogramLabels = [
-            'service_type' => $serviceType,
-            'provider' => $provider,
-        ];
-        $histogramKey = $this->buildKey($histogramLabels);
-
-        if (!isset($this->providerHistograms[$histogramKey])) {
-            $bucketCounts = [];
-            foreach ($this->providerHistogramBuckets as $bucket) {
-                $bucketCounts[$this->formatBucket($bucket)] = 0;
-            }
-
-            $this->providerHistograms[$histogramKey] = [
-                'labels' => $histogramLabels,
-                'buckets' => $bucketCounts,
-                'sum' => 0.0,
-                'count' => 0,
-            ];
-        }
-
-        $histogram = &$this->providerHistograms[$histogramKey];
-        $histogram['sum'] += $durationSeconds;
-        ++$histogram['count'];
-
-        foreach ($this->providerHistogramBuckets as $bucket) {
-            if ($durationSeconds <= $bucket) {
-                $bucketKey = $this->formatBucket($bucket);
-                ++$histogram['buckets'][$bucketKey];
-            }
-        }
-        unset($histogram);
-        $this->persist();
 
         try {
             $this->traceRecorder?->recordProviderRequest($serviceType, $provider, $durationSeconds, $statusCode, $success);
@@ -109,33 +118,38 @@ final class MetricsRegistry
 
     public function recordSyntheticCheck(string $name, float $durationSeconds, int $statusCode, bool $success): void
     {
-        $this->loadFromCache();
         $durationSeconds = max(0.0, $durationSeconds);
-        $labels = ['check' => $name];
-        $key = $this->buildKey($labels);
+        $checkedAt = time();
 
-        if (!isset($this->syntheticChecks[$key])) {
-            $this->syntheticChecks[$key] = [
-                'labels' => $labels,
-                'up' => 0,
-                'duration' => 0.0,
-                'status_code' => 0,
-                'checked_at' => 0,
-                'total' => 0,
-                'failures' => 0,
-            ];
+        try {
+            $this->mutateRegistry(function () use ($name, $durationSeconds, $statusCode, $success, $checkedAt): void {
+                $labels = ['check' => $name];
+                $key = $this->buildKey($labels);
+
+                if (!isset($this->syntheticChecks[$key])) {
+                    $this->syntheticChecks[$key] = [
+                        'labels' => $labels,
+                        'up' => 0,
+                        'duration' => 0.0,
+                        'status_code' => 0,
+                        'checked_at' => 0,
+                        'total' => 0,
+                        'failures' => 0,
+                    ];
+                }
+
+                $this->syntheticChecks[$key]['up'] = $success ? 1 : 0;
+                $this->syntheticChecks[$key]['duration'] = $durationSeconds;
+                $this->syntheticChecks[$key]['status_code'] = $statusCode;
+                $this->syntheticChecks[$key]['checked_at'] = $checkedAt;
+                ++$this->syntheticChecks[$key]['total'];
+                if (!$success) {
+                    ++$this->syntheticChecks[$key]['failures'];
+                }
+            });
+        } catch (\Throwable) {
+            // Observability must never break synthetic checks.
         }
-
-        $this->syntheticChecks[$key]['up'] = $success ? 1 : 0;
-        $this->syntheticChecks[$key]['duration'] = $durationSeconds;
-        $this->syntheticChecks[$key]['status_code'] = $statusCode;
-        $this->syntheticChecks[$key]['checked_at'] = time();
-        ++$this->syntheticChecks[$key]['total'];
-        if (!$success) {
-            ++$this->syntheticChecks[$key]['failures'];
-        }
-
-        $this->persist();
     }
 
     /**
@@ -309,6 +323,26 @@ final class MetricsRegistry
         $this->loaded = true;
     }
 
+    /**
+     * @param \Closure(): void $mutation
+     */
+    private function mutateRegistry(\Closure $mutation): void
+    {
+        $lock = $this->openLock();
+
+        try {
+            $this->loaded = false;
+            $this->loadFromCache();
+            $mutation();
+            $this->persist();
+        } finally {
+            if (is_resource($lock)) {
+                flock($lock, LOCK_UN);
+                fclose($lock);
+            }
+        }
+    }
+
     private function persist(): void
     {
         $item = $this->cache->getItem(self::CACHE_KEY);
@@ -318,6 +352,44 @@ final class MetricsRegistry
             'synthetic_checks' => $this->syntheticChecks,
         ]);
         $this->cache->save($item);
+    }
+
+    /**
+     * @return resource|null
+     */
+    private function openLock()
+    {
+        $lockPath = $this->resolvePath($this->lockPath);
+        $lockDir = dirname($lockPath);
+        if (!is_dir($lockDir) && !@mkdir($lockDir, 0775, true) && !is_dir($lockDir)) {
+            return null;
+        }
+
+        $lock = @fopen($lockPath, 'c');
+        if (!$lock) {
+            return null;
+        }
+
+        if (!flock($lock, LOCK_EX)) {
+            fclose($lock);
+
+            return null;
+        }
+
+        return $lock;
+    }
+
+    private function resolvePath(string $path): string
+    {
+        if (preg_match('#^(?:[A-Za-z]:[\\\\/]|/)#', $path)) {
+            return $path;
+        }
+
+        if ('' !== $this->projectDir) {
+            return $this->projectDir.DIRECTORY_SEPARATOR.$path;
+        }
+
+        return $path;
     }
 
     /**

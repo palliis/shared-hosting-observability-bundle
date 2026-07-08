@@ -13,7 +13,7 @@ final class HttpHeaderParser
     {
         $parsed = [];
 
-        foreach (explode(';', $headers) as $header) {
+        foreach ($this->splitHeaders($headers) as $header) {
             $header = trim($header);
             if ('' === $header || !str_contains($header, '=')) {
                 continue;
@@ -29,5 +29,38 @@ final class HttpHeaderParser
         }
 
         return $parsed;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function splitHeaders(string $headers): array
+    {
+        $parts = [];
+        $current = '';
+        $length = strlen($headers);
+
+        for ($i = 0; $i < $length; ++$i) {
+            $char = $headers[$i];
+            if ('\\' === $char && $i + 1 < $length && (';' === $headers[$i + 1] || '\\' === $headers[$i + 1])) {
+                $current .= $headers[$i + 1];
+                ++$i;
+
+                continue;
+            }
+
+            if (';' === $char) {
+                $parts[] = $current;
+                $current = '';
+
+                continue;
+            }
+
+            $current .= $char;
+        }
+
+        $parts[] = $current;
+
+        return $parts;
     }
 }

@@ -22,17 +22,32 @@ final class TraceSpoolWriter
             return;
         }
 
-        if ($this->maxSpoolBytes > 0 && $this->directorySize($dir) >= $this->maxSpoolBytes) {
-            return;
-        }
-
-        $file = $dir.DIRECTORY_SEPARATOR.'traces-'.gmdate('YmdHi').'.jsonl';
         $line = json_encode($trace, JSON_UNESCAPED_SLASHES);
         if (false === $line) {
             return;
         }
 
-        @file_put_contents($file, $line."\n", FILE_APPEND | LOCK_EX);
+        $line .= "\n";
+        if ($this->maxSpoolBytes > 0 && strlen($line) > $this->maxSpoolBytes) {
+            return;
+        }
+
+        $lock = $this->openLock($dir);
+        if (!$lock) {
+            return;
+        }
+
+        try {
+            if ($this->maxSpoolBytes > 0 && ($this->directorySize($dir) + strlen($line)) > $this->maxSpoolBytes) {
+                return;
+            }
+
+            $file = $dir.DIRECTORY_SEPARATOR.'traces-'.gmdate('YmdHi').'.jsonl';
+            @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     private function resolvePath(string $path): string
@@ -42,6 +57,25 @@ final class TraceSpoolWriter
         }
 
         return $this->projectDir.DIRECTORY_SEPARATOR.$path;
+    }
+
+    /**
+     * @return resource|null
+     */
+    private function openLock(string $dir)
+    {
+        $lock = @fopen($dir.DIRECTORY_SEPARATOR.'.trace-spool.lock', 'c');
+        if (!$lock) {
+            return null;
+        }
+
+        if (!flock($lock, LOCK_EX)) {
+            fclose($lock);
+
+            return null;
+        }
+
+        return $lock;
     }
 
     private function directorySize(string $dir): int
